@@ -1,0 +1,43 @@
+name: Android Build APK
+
+# 触发条件：当代码推送到 main 分支，或手动点击触发
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch: # 允许你在 GitHub 网页上手动点击按钮触发构建
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. 拉取代码
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # 2. 设置 JDK 环境 (Android通常需要 JDK 17)
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    # 3. 授予 gradlew 执行权限 (防止权限不足报错)
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    # 4. 构建 Debug APK (如果要构建 Release 包，请把 assembleDebug 改为 assembleRelease)
+    - name: Build with Gradle
+      run: ./gradlew assembleDebug
+
+    # 5. 上传生成的 APK 到 GitHub Actions 的 Artifacts 下载区
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-debug
+        path: app/build/outputs/apk/debug/app-debug.apk
+        # 如果你的 APK 路径不同，请修改上面的 path
+        # 常见路径: app/build/outputs/apk/debug/*.apk
