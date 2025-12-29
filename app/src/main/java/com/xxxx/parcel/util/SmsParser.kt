@@ -10,16 +10,15 @@ class SmsParser {
         """(?i)(取件码为?|提货号为?|取货码为?|提货码为?|取件码|提货号|取货码|提货码|凭|快递|京东|天猫|中通|顺丰|韵达|菜鸟|签收码|签收编号|提货编码|收货编码)[：:\s]*[『「【\(\[ ]*([A-Za-z0-9\s-]{3,}(?:[，,、\s][A-Za-z0-9\s-]{3,})*)[」』】\)\]]*"""
     )
 
-    // 改进的地址匹配模式（版本一的强项）
+    // 改进的地址匹配模式（版本一优势）
     private val addressPatterns = listOf(
         Pattern.compile("""(?i)取件地址[:\s]*([^，。！？\s]+[\s\S]*?)(?=取件码|$|请|尽快|及时)"""),
         Pattern.compile("""(?i)(?:近邻宝|丰巢|菜鸟|中通|顺丰|韵达|圆通|申通|京东)[^，。！？]*?[|｜]?\s*([^，。！？\s]+?(?:驿站|快递柜|快递点|柜|室|号|栋|楼|单元|小区|学校|食堂|医院)[^，。！？]*)"""),
         Pattern.compile("""(?i)(?:到|位于|放至|送达|放入)[\s]*([^，。！？\s]+?(?:驿站|快递柜|快递点|柜|室|号|栋|楼|单元|小区|学校|食堂|医院)[^，。！？]*)"""),
-        // 模式 4：这是匹配你那条短信的关键，它会匹配“二食堂...281格口”
         Pattern.compile("""([\u4e00-\u9fa5a-zA-Z0-9\s-]+?(?:驿站|快递柜|快递点|快递室|快递站|门牌|柜|室|号|栋|楼|单元|小区|花园|苑|广场|大厦|超市|便利店|学校|食堂|医院|银行|校内|校外|路|街|巷)[^，。！？]*)""")
     )
 
-    // 优先级最低的保底模式（仅当上面都失效时使用）
+    // 优先级最低的保底模式
     private val lockerPattern: Pattern =
         Pattern.compile("""(?i)([0-9A-Z-]+)号(?:柜|快递柜|丰巢柜|蜂巢柜|熊猫柜|兔喜快递柜)""")
 
@@ -47,9 +46,7 @@ class SmsParser {
             foundCode = rawCode.split(Regex("[，,、]")).joinToString(", ") { cleanCodeText(it) }
         }
 
-        // 3. 提取地址 (修改顺序：自定义 -> 长地址模式 -> 柜号保底)
-        
-        // 3.1 自定义
+        // 3. 提取地址 (自定义 -> 长地址模式 -> 柜号保底)
         for (pattern in customAddressPatterns) {
             if (sms.contains(pattern, ignoreCase = true)) {
                 foundAddress = pattern
@@ -57,7 +54,6 @@ class SmsParser {
             }
         }
 
-        // 3.2 匹配长地址模式（版本一逻辑，现在是最高优先级）
         if (foundAddress.isEmpty()) {
             for (pattern in addressPatterns) {
                 val matcher = pattern.matcher(sms)
@@ -68,7 +64,6 @@ class SmsParser {
             }
         }
 
-        // 3.3 只有长地址没找到，才用柜号保底
         if (foundAddress.isEmpty()) {
             val lockerMatcher = lockerPattern.matcher(sms)
             if (lockerMatcher.find()) {
@@ -87,11 +82,9 @@ class SmsParser {
     private fun cleanAddressText(address: String, code: String): String {
         if (address.isEmpty()) return ""
         var cleaned = address
-        // 排除掉干扰，但保留关键地址信息
         val noise = listOf("您的邮政快递包裹已到", "您的快递已到", "包裹已到", "已到", "位于", "放至")
         noise.forEach { cleaned = cleaned.replace(it, "") }
         
-        // 移除取件码
         if (code.isNotEmpty()) {
             code.split(", ").forEach { cleaned = cleaned.replace(it, "") }
         }
@@ -100,7 +93,6 @@ class SmsParser {
     }
 
     private fun finalCleanAddress(address: String): String {
-        // 移除开头多余的修饰词
         return address.replace(Regex("^[^\\w\u4e00-\u9fa5]+"), "").trim()
     }
 
@@ -108,6 +100,41 @@ class SmsParser {
         return code.replace(Regex("""[『「【\(\[」』】\)\]\s]"""), "").trim()
     }
 
-    // ... 其他 addCustomPattern 方法保持不变 ...
-    fun addIgnoreKeyword(keyword: String) { ignoreKeywords.add(keyword) }
+    // --- 补全被其他类调用的公开方法 (解决 Unresolved reference 报错) ---
+
+    fun addCustomAddressPattern(pattern: String) {
+        if (pattern.isNotBlank()) customAddressPatterns.add(pattern)
+    }
+
+    fun addCustomCodePattern(pattern: String) {
+        if (pattern.isNotBlank()) {
+            try {
+                customCodePatterns.add(Pattern.compile(pattern))
+            } catch (e: Exception) {
+                Log.e("SmsParser", "Invalid Regex: $pattern")
+            }
+        }
+    }
+
+    fun clearAllCustomPatterns() {
+        customAddressPatterns.clear()
+        customCodePatterns.clear()
+        ignoreKeywords.clear()
+    }
+
+    fun addIgnoreKeyword(keyword: String) {
+        if (keyword.isNotBlank() && !ignoreKeywords.contains(keyword)) {
+            ignoreKeywords.add(keyword)
+        }
+    }
+
+    fun removeIgnoreKeyword(keyword: String) {
+        ignoreKeywords.remove(keyword)
+    }
+
+    fun getIgnoreKeywords(): List<String> = ignoreKeywords.toList()
+
+    fun clearIgnoreKeywords() {
+        ignoreKeywords.clear()
+    }
 }
