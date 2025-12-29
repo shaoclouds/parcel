@@ -8,11 +8,13 @@ plugins {
     kotlin("plugin.serialization") version "1.9.10"
 }
 
+// 安全地读取 properties
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
+
 android {
     namespace = "com.xxxx.parcel"
     compileSdk = 35
@@ -26,24 +28,36 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+
     signingConfigs {
         create("release") {
-            keyAlias = keystoreProperties["keyAlias"] as String
-            password = System.getenv("KEY_PASSWORD") ?: "default_password"
-            storeFile = keystoreProperties["storeFile"]?.let { file(it) }
-            storePassword = keystoreProperties["storePassword"] as String
+            // 使用 getProperty 并提供默认值，防止在 GitHub Actions 中崩溃
+            keyAlias = keystoreProperties.getProperty("keyAlias") ?: "debug"
+            keyPassword = (System.getenv("KEY_PASSWORD") ?: keystoreProperties.getProperty("keyPassword") ?: "android")
+            storeFile = keystoreProperties.getProperty("storeFile")?.let { file(it) } ?: rootProject.file("debug.keystore")
+            storePassword = keystoreProperties.getProperty("storePassword") ?: "android"
         }
     }
+
     buildTypes {
         release {
-             signingConfig = signingConfigs.getByName("release")
+            // 只有当签名信息完整时才启用签名，否则 GitHub 构建会失败
+            if (keystoreProperties.containsKey("storeFile") || System.getenv("KEY_PASSWORD") != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
+        
+        debug {
+            // Debug 模式使用 Android 默认签名，不配置任何自定义签名逻辑
+            signingConfig = null 
+        }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -55,15 +69,12 @@ android {
         compose = true
     }
     dependenciesInfo {
-        // Disables dependency metadata when building APKs.
         includeInApk = false
-        // Disables dependency metadata when building Android App Bundles.
         includeInBundle = false
     }
 }
 
 dependencies {
-
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -88,6 +99,6 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
-    implementation("androidx.core:core-ktx:1.10.1") // 添加 Core KTX
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0") // 添加序列化支持
+    implementation("androidx.core:core-ktx:1.10.1") 
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
 }
