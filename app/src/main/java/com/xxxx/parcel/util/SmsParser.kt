@@ -1,9 +1,7 @@
 package com.xxxx.parcel.util
-
 import android.util.Log
 import java.util.regex.Matcher
 import java.util.regex.Pattern
-
 class SmsParser {
     // 使用正则表达式来匹配地址和取件码（1个或多个取件码）优先匹配快递柜
     private val lockerPattern: Pattern =
