@@ -29,7 +29,7 @@ android {
     signingConfigs {
         create("release") {
             keyAlias = keystoreProperties["keyAlias"] as String
-            keyPassword = keystoreProperties["keyPassword"] as String
+            password = System.getenv("KEY_PASSWORD") ?: "default_password"
             storeFile = keystoreProperties["storeFile"]?.let { file(it) }
             storePassword = keystoreProperties["storePassword"] as String
         }
