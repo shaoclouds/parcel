@@ -40,6 +40,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -68,6 +71,8 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import android.os.Build
+import com.xxxx.parcel.model.SmsModel
+import com.xxxx.parcel.util.addCustomSms
 
 @SuppressLint("StateFlowValueCalledInComposition")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -89,6 +94,7 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     var showBottomSheet by remember { mutableStateOf(false) }
     var showCompleted by remember { mutableStateOf(getShowCompleted(context)) }
+    var showAddDialog by remember { mutableStateOf(false) }
     val timeFilterOptions = listOf(
         "全部",
         "今天",
@@ -108,6 +114,19 @@ fun HomeScreen(
     val successData by viewModel.successSmsData.collectAsState()
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        floatingActionButton = {
+            if (hasPermission) {
+                FloatingActionButton(
+                    onClick = { showAddDialog = true },
+                    containerColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Add,
+                        contentDescription = "手动添加取件码"
+                    )
+                }
+            }
+        },
         topBar = {
             TopAppBar(
                 title = { },
@@ -269,6 +288,26 @@ fun HomeScreen(
                     )
                 }
             }
+        }
+        
+        // 手动添加取件码的对话框
+        if (showAddDialog) {
+            AddParcelDialog(
+                onDismiss = { showAddDialog = false },
+                onConfirm = { code, address ->
+                    // 创建自定义短信
+                    val currentTime = System.currentTimeMillis()
+                    val smsContent = "【自定义取件短信】取件码${code}，包裹已到${address}"
+                    val smsModel = SmsModel(
+                        id = currentTime.toString(),
+                        body = smsContent,
+                        timestamp = currentTime
+                    )
+                    addCustomSms(context, smsModel)
+                    (context as MainActivity).readAndParseSms()
+                    showAddDialog = false
+                }
+            )
         }
     }
 
@@ -547,4 +586,60 @@ private fun getShowCompleted(context: Context): Boolean {
     } catch (_: Exception) {
         true
     }
+}
+
+@Composable
+fun AddParcelDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (code: String, address: String) -> Unit
+) {
+    var pickupCode by remember { mutableStateOf("") }
+    var pickupAddress by remember { mutableStateOf("") }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(text = "手动添加取件信息")
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = pickupCode,
+                    onValueChange = { pickupCode = it },
+                    label = { Text("取件码") },
+                    placeholder = { Text("请输入取件码") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = pickupAddress,
+                    onValueChange = { pickupAddress = it },
+                    label = { Text("取件地址") },
+                    placeholder = { Text("请输入取件地址") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (pickupCode.isNotBlank() && pickupAddress.isNotBlank()) {
+                        onConfirm(pickupCode.trim(), pickupAddress.trim())
+                    }
+                },
+                enabled = pickupCode.isNotBlank() && pickupAddress.isNotBlank()
+            ) {
+                Text("确定")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
 }
